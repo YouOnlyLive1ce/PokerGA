@@ -160,15 +160,32 @@ class InfiniteTournament:
         print("Stacks:")
         for player in self.current_board.players:
             print(player.stack)
-      
 
-
+class Chromosome:
+    def __init__(self) -> None:
+        self.preflop_ranges
+        self.flop_ranges
+        
+    # fixed bet = [0,0.25,0.5,1,2] of pot
+    # if AK, than not neccesairly bet 0.5*pot, also may check
+    # bet_coefficient=[hand_power_range: coefficient]
+    # change ranges +-50%, initially uniform
+    
+    def bet(self, pot, hand_power):
+        bet_coefficient= ... # based on genes: flop_ranges[hand_power]->coefficient
+        bet=bet_coefficient*pot
+        
+    def fitness(): #To understand if chromosome is good
+        ...
+        
 # Initial stack 
 deck=Deck()
+# initiate players and stacks
 player1=Player(10)
 player2=Player(20)
 players=[player1,player2]
+# initiate tournament
 tournament=InfiniteTournament(players)
+# save stacks after each game
+# play 100 games, if one die, then rebuy
 tournament.play_one_game()
-
-# preflop bigblind, allin->call message player fold
