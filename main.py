@@ -1,5 +1,8 @@
 # !pip install treys
 from treys import Card, Evaluator, Deck
+from random import shuffle, sample
+import bisect
+import time
 
 class Player:
     def __init__(self, stack) -> None:
@@ -7,68 +10,28 @@ class Player:
         self.hand=None
         self.fold=False
         self.allin=False
-    def bet(self, board):
-        # Auto bets
-        if self.fold==True:
-            print("player already folded")
-            return
-        if self.allin==True:
-            board._player_bet(self,0)
-            print("auto bet 0")
-            return
-        # If player already bets and bet=max and not preflop (bigblind situation)
-        if self in board.players_bets and board.players_bets[self]==board.street_max_bet and board.street!="preflop":
-            board._player_bet(self,0)
-            return
-        
-        # Read bet
-        bet_amount=int(input())
-        
-        # Call allin
-        if board.amount_allin>=1:
-            if self in board.players_bets:
-                bet_to_call_allin=min(board.street_max_bet-board.players_bets[self],self.stack)
-            else:
-                bet_to_call_allin=min(board.street_max_bet,self.stack)
-            if bet_amount>=bet_to_call_allin:
-                self.stack-=bet_to_call_allin
-                board._player_bet(self,bet_to_call_allin)
-                self.allin=True
-                print("player call allin with bet",bet_to_call_allin)
-                return
-        # Allin
-        if bet_amount>self.stack:
-            print("player goes all in with bet", self.stack)
-            board.amount_allin+=1
-            self.allin=True
-            bet_amount=self.stack
-            self.stack-=bet_amount
-            board._player_bet(self,bet_amount)
-            return
-        
-        # Casual bet/ check = bet=0
-        self.stack-=bet_amount
-        board._player_bet(self,bet_amount)
-        
-        # Fold
-        if board.players_bets[self]<board.street_max_bet and self.allin==False:
-            self.fold=True
-            board.amount_folds+=1
-            print("player folds")
-            board.players_bets.pop(self)
-            return
+        self.amount_rebuys=0
 
+    def bet(self, board):
+        bet_amount= self.estimate_bet(board, self.hand)
+        board._validate_bet(self, bet_amount) 
+
+    def estimate_bet(self, board, hand):
+        # for manual enter of bet
+        bet_amount=int(input())
+        return bet_amount
+    
     def blind(self, blind_value,board):
+        print(blind_value)
         board.pot+=blind_value
         self.stack-=blind_value
         board.players_bets[self]=blind_value
 
 class Board:
     def __init__(self) -> None:
-        self.current_street=None
+        self.current_street_index=0
         self.streets=None
         self.bets_equal=False
-        self.players=[]
         self.players_bets={}
         self.street_max_bet=0
         self.pot=0
@@ -77,28 +40,106 @@ class Board:
 
     def set_streets(self, deck):
         self.streets=["preflop", deck.draw(3),deck.draw(1),deck.draw(1)]
-    def set_players(self, players):
-        self.players=players
 
-    def _player_bet(self, player, bet_amount):
+    def _validate_bet(self, player, bet_amount):
+        """Ensures that bet is valid"""
+        
+        # Auto bets
+        if player.fold==True:
+            print("player already folded")
+            return
+        if player.allin==True:
+            self._place_bet(player,0)
+            return
+        
+        # Bet no more than min total stack
+        players_total_stack=tournament.get_players_available_stacks() 
+        for player_temp in players_total_stack.keys():
+            if player_temp in self.players_bets:
+                players_total_stack[player_temp]+=self.players_bets[player_temp]
+        max_bet_on_street=min(players_total_stack.values())
+        print("max bet on this street is ", max_bet_on_street)
+        
+        # if player himself is min player stack, then skip (he goes allin)
+        if player.stack==max_bet_on_street:
+            pass
+        elif player in self.players_bets and bet_amount+self.players_bets[player]>max_bet_on_street:
+            bet_amount=max_bet_on_street-self.players_bets[player]
+            print("bet fixed: ", bet_amount)
+
+        # If player already bets and bet=max and not preflop <?>
+        if player in self.players_bets and self.players_bets[player]==self.street_max_bet and self.current_street_index!=0:
+            self._place_bet(player,0)
+            return
+        
+        # Call allin
+        if self.amount_allin>=1:
+            if player in self.players_bets:
+                bet_to_call_allin=min(self.street_max_bet-self.players_bets[player],player.stack)
+            else:
+                bet_to_call_allin=min(self.street_max_bet,player.stack)
+            if bet_amount>=bet_to_call_allin:
+                player.stack-=bet_to_call_allin
+                self._place_bet(player,bet_to_call_allin)
+                player.allin=True
+                print("player call allin with bet",bet_to_call_allin)
+                return
+        
+        # Allin
+        if bet_amount>=player.stack:
+            print("player goes all in with bet", player.stack)
+            self.amount_allin+=1
+            player.allin=True
+            bet_amount=player.stack
+            
+            # Bet no more than opponent stack
+            # max_bet=tournament.player_min_stack().stack
+            # if bet_amount>max_bet:
+            #     bet_amount=max_bet
+                
+            player.stack-=bet_amount
+            self._place_bet(player,bet_amount)
+            return
+        
+        # Casual bet/ check = bet=0
+        player.stack-=bet_amount
+        self._place_bet(player,bet_amount)
+        
+        # Fold
+        if self.players_bets[player]<self.street_max_bet and player.allin==False:
+            player.fold=True
+            self.amount_folds+=1
+            print("player folds")
+            self.players_bets.pop(player)
+            return
+        
+    def _place_bet(self, player, bet_amount):
         if player in self.players_bets:
             self.players_bets[player]+=bet_amount
         else:
             self.players_bets[player]=bet_amount
 
+        print("player bet ", bet_amount)
         self.pot+=bet_amount
         self.street_max_bet=max(self.street_max_bet, self.players_bets[player])
         # check if all bets on street are equal
         first_value = next(iter(self.players_bets.values()))
         self.bets_equal=all(value == first_value for value in self.players_bets.values())
 
-class InfiniteTournament:
-    def __init__(self,players) -> None:
+class Tournament:
+    def __init__(self,players, rebuy_allowed=True) -> None:
         self.boards = []
         self.players = players
         self.current_deck=None
         self.current_board=None
+        self.rebuy_allowed=rebuy_allowed
 
+    def get_players_available_stacks(self):
+        players_stacks={}
+        for player in self.players:
+            players_stacks[player]=player.stack
+        return players_stacks
+    
     def play_one_game(self):
         #Initialize cards
         self.current_deck=Deck()
@@ -107,85 +148,139 @@ class InfiniteTournament:
         current_board.set_streets(self.current_deck)
         self.current_board=current_board
         
-        # <if stack >0 >
-        self.current_board.set_players(self.players)
-        for player in self.current_board.players:
-            player.hand=deck.draw(2)
+        for player in self.players:
+            if player.stack<=2 and self.rebuy_allowed:
+                print("player rebuys")
+                player.stack=100
+                player.amount_rebuys+=1
+            player.hand=self.current_deck.draw(2)
             Card.print_pretty_cards(player.hand)
         
-        # self.boards.append(self.current_board) # save stats
-        
-        # <make random>
-        players[0].blind(1, self.current_board)
-        players[1].blind(2, self.current_board)
+        # Blinds
+        players_blinds=[1,2]
+        shuffle(players_blinds)
+        for i in range(len(self.players)):
+            self.players[i].blind(players_blinds[i], self.current_board)
         
         #streets
-        for self.current_board.street in self.current_board.streets:
-            if self.current_board.street!="preflop":
-                Card.print_pretty_cards(self.current_board.street)
+        for self.current_board.current_street_index in range(len(self.current_board.streets)):
+            if self.current_board.current_street_index!=0: # if not preflop
+                Card.print_pretty_cards(self.current_board.streets[self.current_board.current_street_index])
             while "Bets not equal":
-                for player in self.current_board.players:
+                for player in self.players:
                     player.bet(self.current_board)
                     
-                    if self.current_board.amount_folds>=1 and self.current_board.amount_folds==len(self.current_board.players)-1:
+                    if self.current_board.amount_folds>=1 and self.current_board.amount_folds==len(self.players)-1:
                         print("every player except one folds")
                         self.choose_winner()
                         return
-                
+                if self.current_board.amount_allin==len(self.players):
+                    print("all players allin")
+                    break
                 if self.current_board.bets_equal and len(self.current_board.players_bets)>1:
                     print("street over, bets equal")
                     break
                 print("Players total bets on street")
-                for player in self.current_board.players:
+                for player in self.players:
                     print(self.current_board.players_bets[player])
             
-            #Reset flags and temps
+            #Reset board flags and temps <create new?>
             self.current_board.bets_equal=False
             self.current_board.street_max_bet=0
             self.current_board.players_bets={}
+            # self.current_board.amount_allin=0
+            # self.current_board.amount_folds=0
         self.choose_winner()
         return
 
-    def choose_winner(self):
-        evaluator = Evaluator()
-        p_score=[]
-        for player in self.current_board.players:
-            if player.fold==False:
-                p_score.append(evaluator.evaluate(self.current_board.streets[1]+self.current_board.streets[2]+self.current_board.streets[3], player.hand))
-            else:
-                p_score.append(7463) #worst hand=7462
-        winner_index=p_score.index(min(p_score))
-        print("player #",winner_index," wins")
-        self.current_board.players[winner_index].stack+=self.current_board.pot
-        print("Stacks:")
-        for player in self.current_board.players:
-            print(player.stack)
-
-class Chromosome:
-    def __init__(self) -> None:
-        self.preflop_ranges
-        self.flop_ranges
-        
-    # fixed bet = [0,0.25,0.5,1,2] of pot
-    # if AK, than not neccesairly bet 0.5*pot, also may check
-    # bet_coefficient=[hand_power_range: coefficient]
-    # change ranges +-50%, initially uniform
+    # def play_till_lose(self):
     
-    def bet(self, pot, hand_power):
-        bet_coefficient= ... # based on genes: flop_ranges[hand_power]->coefficient
-        bet=bet_coefficient*pot
+    def choose_winner(self):
+        hand_scores=[]
+        for player in self.players:
+            if player.fold==False:
+                hand_scores.append(evaluator.evaluate(player.hand, self.current_board.streets[1]+self.current_board.streets[2]+self.current_board.streets[3]))
+            else:
+                hand_scores.append(7463) #worst hand=7462
+                
+        winner_index=hand_scores.index(min(hand_scores))
+        print("player #",winner_index," wins")
+        self.players[winner_index].stack+=self.current_board.pot
+        print("Stacks:")
+        for player in self.players:
+            print(player.stack)
+            
+        # Reset player flags
+        for player in self.players:
+            player.hand=None
+            player.fold=False
+            player.allin=False
+
+class GeneticPlayer(Player):
+    def __init__(self) -> None:
+        # Based on power of hand, player will bet some % of pot
+        # Ranges will be corrected by genetic algorithm
+        # Range is a slice of possible hand powers (1...7462), 1 is best
+        # Initially bounds are random
+    
+        super().__init__(100)
         
-    def fitness(): #To understand if chromosome is good
-        ...
+        # Genes
+        preflop_bounds = sample(range(1, 7462), 4)
+        postflop_bounds = sample(range(1, 7462), 4)
+        preflop_bounds.sort()
+        postflop_bounds.sort()
+        self.preflop_ranges=[1]+preflop_bounds+[7462]
+        self.postflop_ranges=[1]+postflop_bounds+[7462]
+        self.pot_coefficients=[2,1,0.5,0.25,0]
+    
+    def estimate_bet(self, board, hand):
+        # ?if AK, than not neccesairly bet 0.5*pot, also may check (kinda bluffs) (prevent overfold)?
+        board_cards_known=[]
+        # if board.current_street_index==0:
+        #     board_cards_known=[Card.new('Ah'), Card.new('Kd'), Card.new('Qs')]
+        # else:
+        #     for i in range(1, board.current_street_index+1):
+        #         board_cards_known.append(board.streets[i])
+        hand_power=evaluator.evaluate(hand, board.streets[1]+board.streets[2]+board.streets[3])
         
+        range_index=bisect.bisect_left(self.postflop_ranges, hand_power)
+        bet_coefficient=self.pot_coefficients[range_index-1]
+        bet=bet_coefficient*board.pot
+        return bet
+
+    def fitness(self): 
+        #To understand if chromosome is good
+        return self.player.stack/(self.player.amount_rebuys+1)
+
+    def mutate_postflop(self):
+        # ?change ranges +-50% ?
+        mutate_bound = sample(range(1, 7462), 1)[0]
+        mutate_index=bisect.bisect_left(self.postflop_ranges, mutate_bound)
+        self.postflop_ranges[mutate_index-1]=mutate_bound
+    
+    def crossover_postflop(self, chromosome2):
+        crossover_index = sample(range(2, 5), 1)[0]
+        temp=self.postflop_ranges[crossover_index-1]
+        self.postflop_ranges[crossover_index-1]=chromosome2.postflop_ranges[crossover_index]
+        chromosome2.postflop_ranges[crossover_index]=temp
+        chromosome2.postflop_ranges.sort()
+        self.postflop_ranges.sort()
+        return chromosome2
+
 # Initial stack 
 deck=Deck()
-# initiate players and stacks
-player1=Player(10)
-player2=Player(20)
-players=[player1,player2]
-# initiate tournament
-tournament=InfiniteTournament(players)
-# save stacks after each game
-# play 100 games, if one die, then rebuy
-tournament.play_one_game()
+evaluator = Evaluator()
+# initiate random chromosomes
+random_player=GeneticPlayer() # will not evolve
+genetic_players=[]
+tournaments=[]
+for i in range (10):
+    genetic_players.append(GeneticPlayer())
+    players=[random_player,genetic_players[i]]
+    tournament=Tournament(players)
+    tournaments.append(tournament)
+for tournament in tournaments:
+    # play 100 games, if one lose, then rebuy
+    for game_number in range(100):
+        tournament.play_one_game()
