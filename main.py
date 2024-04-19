@@ -26,9 +26,8 @@ class Player:
     
     def blind(self, blind_value,board):
         # print(blind_value)
-        # board.pot+=blind_value
         self.stack-=blind_value
-        board.players_bets[self]=blind_value
+        board.pot+=blind_value
 
 class Board:
     def __init__(self) -> None:
@@ -36,7 +35,7 @@ class Board:
         self.streets=None
         self.bets_equal=False
         self.players_bets={}
-        self.street_max_bet=0
+        self.street_max_bet=0 # largest bet from some player
         self.pot=0
         self.amount_folds=0
         self.amount_allin=0
@@ -93,17 +92,13 @@ class Board:
             # print("player goes all in with bet", player.stack)
             self.amount_allin+=1
             player.allin=True
-            bet_amount=player.stack
-            
-            # Bet no more than opponent stack
-            # max_bet=tournament.player_min_stack().stack
-            # if bet_amount>max_bet:
-            #     bet_amount=max_bet
-                
+            bet_amount=player.stack             
             player.stack-=bet_amount
             self.save_bet(player,bet_amount)
+            time.sleep(1)
             return
         
+        # Casual bet
         player.stack-=bet_amount
         self.save_bet(player,bet_amount)
         
@@ -175,7 +170,7 @@ class Tournament:
         #streets
         for self.current_board.current_street_index in range(len(self.current_board.streets)):
             # if self.current_board.current_street_index!=0: # if not preflop
-                # Card.print_pretty_cards(self.current_board.streets[self.current_board.current_street_index])
+            #     Card.print_pretty_cards(self.current_board.streets[self.current_board.current_street_index])
             while "Bets not equal":
                 for player in self.players:
                     player.bet(self.current_board)
@@ -188,13 +183,13 @@ class Tournament:
                     # print("all players allin")
                     break
                 
+                # print("Players total bets on street")
+                # for player in self.players:
+                    # print(self.current_board.players_bets[player])
+                
                 if self.current_board.bets_equal and len(self.current_board.players_bets)>1:
                     # print("street over, bets equal")
                     break
-                
-                # print("Players total bets on street")
-                # for player in self.players:
-                #     print(self.current_board.players_bets[player])
                 
                 # Check whose raise is less, make them fold
                 every_player_raised=True
@@ -213,12 +208,10 @@ class Tournament:
             for player in self.players:
                 player.raised=False
             
-            #Reset board flags and temps <create new?>
+            #Reset board flags and temps before next street
             self.current_board.bets_equal=False
             self.current_board.street_max_bet=0
             self.current_board.players_bets={}
-            # self.current_board.amount_allin=0
-            # self.current_board.amount_folds=0
         self.choose_winner()
         return
     
@@ -229,14 +222,22 @@ class Tournament:
                 hand_scores.append(evaluator.evaluate(player.hand, self.current_board.streets[1]+self.current_board.streets[2]+self.current_board.streets[3]))
             else:
                 hand_scores.append(7463) #worst hand=7462
-    
+
         winner_index=hand_scores.index(min(hand_scores))
         # print("player #",winner_index," wins")
+        
+        # Give pot and last raise back
         self.players[winner_index].stack+=self.current_board.pot
-        self.players[winner_index].stack+=self.current_board.street_max_bet
+        self.players[winner_index].stack+=sum(list(self.current_board.players_bets.values()))
         # print("Stacks:")
         # for player in self.players:
         #     print(player.stack)
+        
+        # if game_number%20==0:
+        #     sum_stacks=0
+        #     for player in self.players:
+        #         sum_stacks+=player.stack
+        #     print(game_number, sum_stacks)
             
         # Reset player flags
         for player in self.players:
@@ -267,9 +268,14 @@ class GeneticPlayer(Player):
     
     def estimate_bet(self, hand, board):
         # ?if AK, than not neccesairly bet 0.5*pot, also may check (kinda bluffs) (prevent overfold)?
-        board_cards_known=board.streets[1]+board.streets[2]+board.streets[3] # All streets known?
+        board_cards_known=board.streets[1] #initially flop known
+        if board.current_street_index==2:
+            board_cards_known=board.streets[1]+board.streets[2]
+        elif board.current_street_index==3:
+            board_cards_known=board.streets[1]+board.streets[2]+board.streets[3]
+            
         hand_power=evaluator.evaluate(hand, board_cards_known)
-        
+        # Find range of bet
         range_index=bisect.bisect_left(self.postflop_ranges, hand_power)
         bet_coefficient=self.pot_coefficients[range_index-1]
         
@@ -324,13 +330,11 @@ for _ in range (10):
         # play 100 games, if one lose, then rebuy
         for game_number in range(100):
             tournament.play_one_game()
-            # time.sleep(0.1)
-        # for player in tournament.players:
-        #     print(player.stack)
-    # crossover crossover_rate*amount chromosomes with wheel: the better the chromosomes, the larger are chances
-    # mutate mutate_rate*amount_chromosomes, chances are equal
+        
+    #TODO: crossover crossover_rate*amount chromosomes with wheel: the better the chromosomes, the larger are chances
+    #TODO: mutate mutate_rate*amount_chromosomes, chances are equal
     sorted_players=sorted(genetic_players, key=lambda player: player.fitness(), reverse=True)
-    
+  
 def store_info():
     with open('results.txt', 'w') as file:
         for i in range(len(genetic_players)):
