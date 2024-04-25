@@ -23,7 +23,7 @@ This project implements a Genetic Algorithm (GA) to evolve strategies for playin
 
 ## Authors
 - [Dmitrii Nekrasov](https://github.com/YouOnlyLive1ce)
-- [Andrei Pavlov](https://github.com/unicalnoeid)
+- [Andrei Pavlov](https://github.com/IAndermanI)
 - [Andrey Kupriyanov](https://github.com/kupamonke)
   
 ## Usage
