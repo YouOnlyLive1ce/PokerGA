@@ -21,14 +21,16 @@ This project implements a Genetic Algorithm (GA) to evolve strategies for playin
    ```bash
    pip install -r requirements.txt
 
+## Authors
+- [Dmitrii Nekrasov](https://github.com/YouOnlyLive1ce)
+- [Andrei Pavlov](https://github.com/unicalnoeid)
+- [Andrey Kupriyanov](https://github.com/kupamonke)
+  
 ## Usage
 Run the main script to start the evolution process.
    ```bash
    python main.py
 
-## Authors
-- [Dmitrii Nekrasov](https://github.com/YouOnlyLive1ce)
-- [Andrei Pavlov](https://github.com/unicalnoeid)
-- [Andrey Kupriyanov](https://github.com/kupamonke)
+
 
 
